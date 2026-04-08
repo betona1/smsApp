@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb devices:*)",
+      "Bash(./gradlew installDebug:*)",
+      "Bash(./gradlew --stop)",
+      "Bash(java:*)",
+      "Read(//c/Program Files/Android/Android Studio/jbr/bin/**)",
+      "Read(//c/Program Files/Android/Android Studio/jre/bin/**)",
+      "Read(//c/Program Files/Android/**)",
+      "Bash(C:/Program Files/Android/Android Studio/jbr/bin/java.exe:*)",
+      "Bash(adb shell:*)",
+      "Bash(adb logcat:*)",
+      "Bash(bash:*)",
+      "Bash(git:*)"
+    ]
+  }
+}
