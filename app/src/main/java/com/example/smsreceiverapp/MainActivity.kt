@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
             .edit().putBoolean("send_all_sms", true).apply()
         SmsSenderService.start(this)
 
+        // 자동 업데이트 체크
+        AppUpdater.startPeriodicCheck(this)
+
         setContent {
             SmsReceiverAppTheme {
                 val context = LocalContext.current

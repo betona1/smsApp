@@ -12,7 +12,18 @@
       "Bash(adb shell:*)",
       "Bash(adb logcat:*)",
       "Bash(bash:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(gh release:*)",
+      "Bash(adb install:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(mysql:*)",
+      "Bash(where mysql:*)",
+      "Bash(where mariadb:*)",
+      "Bash(pip show:*)",
+      "Bash(python -c \"import pymysql; print\\('pymysql available'\\)\")",
+      "Bash(python:*)",
+      "Read(//tmp/**)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

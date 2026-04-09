@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- 전화번호 관련은 필요 시에만 -->
     <!-- <uses-permission android:name="android.permission.READ_PHONE_STATE" /> -->
@@ -46,7 +47,18 @@
             </intent-filter>
         </activity>
 
-        <!-- 3. SMS 발송 Foreground Service -->
+        <!-- 3. FileProvider (자동 업데이트 APK 설치용) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- 4. SMS 발송 Foreground Service -->
         <service
             android:name=".SmsSenderService"
             android:exported="false"
