@@ -42,8 +42,14 @@ class SmsReceiver : BroadcastReceiver() {
                     Log.d("SmsReceiver", "수신한 번호 sender = $sender")  // ✅ 이 위치!
                     val body = msg.messageBody ?: ""
 
-                    Log.d("SmsReceiver", "\uD83D\uDCF2 sender: $sender")
-                    Log.d("SmsReceiver", "\uD83D\uDCF2 body: $body")
+                    val msgType = if (body.toByteArray(Charsets.UTF_8).size > 80) "LMS" else "SMS"
+                    Log.d("SmsReceiver", "$msgType sender: $sender, body: ${body.take(50)}")
+
+                    if (msgType == "LMS") {
+                        AppLog.lms("BR수신 [$sender] ${body.take(50)}")
+                    } else {
+                        AppLog.sms("BR수신 [$sender] ${body.take(50)}")
+                    }
 
                     val shouldSave = settings.any { setting ->
                         setting.checkphone_number == sender &&
@@ -52,6 +58,7 @@ class SmsReceiver : BroadcastReceiver() {
 
                     if (sendAll || shouldSave) {
                         sendSMSRequest(context, myPhone, sender, body)
+                        AppLog.server("$msgType 서버 전송 [$sender]")
                     } else {
                         Log.d("SmsReceiver", "❌ DB 저장 조건 불충족 → 저장 안함")
                     }

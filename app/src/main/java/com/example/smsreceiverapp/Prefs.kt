@@ -14,17 +14,6 @@ object Prefs {
     private const val DEFAULT_API_HOST = "192.168.219.100"
     private const val DEFAULT_API_PORT = "8010"
 
-    // DB 서버 설정
-    private const val KEY_DB_HOST = "db_host"
-    private const val KEY_DB_PORT = "db_port"
-    private const val KEY_DB_NAME = "db_name"
-    private const val KEY_DB_USER = "db_user"
-    private const val KEY_DB_PASSWORD = "db_password"
-    private const val DEFAULT_DB_HOST = "192.168.219.200"
-    private const val DEFAULT_DB_PORT = "3306"
-    private const val DEFAULT_DB_NAME = "sms2"
-    private const val DEFAULT_DB_USER = "joachamsms"
-    private const val DEFAULT_DB_PASSWORD = "joachmsms#"
 
     private fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -56,29 +45,4 @@ object Prefs {
         }
     }
 
-    // --- DB 서버 ---
-    fun getDbHost(ctx: Context): String =
-        prefs(ctx).getString(KEY_DB_HOST, DEFAULT_DB_HOST) ?: DEFAULT_DB_HOST
-
-    fun getDbPort(ctx: Context): String =
-        prefs(ctx).getString(KEY_DB_PORT, DEFAULT_DB_PORT) ?: DEFAULT_DB_PORT
-
-    fun getDbName(ctx: Context): String =
-        prefs(ctx).getString(KEY_DB_NAME, DEFAULT_DB_NAME) ?: DEFAULT_DB_NAME
-
-    fun getDbUser(ctx: Context): String =
-        prefs(ctx).getString(KEY_DB_USER, DEFAULT_DB_USER) ?: DEFAULT_DB_USER
-
-    fun getDbPassword(ctx: Context): String =
-        prefs(ctx).getString(KEY_DB_PASSWORD, DEFAULT_DB_PASSWORD) ?: DEFAULT_DB_PASSWORD
-
-    fun setDbServer(ctx: Context, host: String, port: String, name: String, user: String, password: String) {
-        prefs(ctx).edit {
-            putString(KEY_DB_HOST, host)
-            putString(KEY_DB_PORT, port)
-            putString(KEY_DB_NAME, name)
-            putString(KEY_DB_USER, user)
-            putString(KEY_DB_PASSWORD, password)
-        }
-    }
 }

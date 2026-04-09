@@ -1,11 +1,15 @@
 package com.example.smsreceiverapp
 
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.DELETE
+import retrofit2.http.Part
 import retrofit2.http.Path
 
 // 서버에서 설정 리스트를 받아오고, 문자 수신 정보를 서버로 전송
@@ -38,6 +42,30 @@ interface ApiService {
         @Path("id") id: Int,
         @Body setting: CSPhoneSettingResponse
     ): Response<CSPhoneSettingResponse>
+
+    // === SMS 발송 관련 ===
+
+    // 서버에서 발송 대기 중인 문자 목록 조회
+    @GET("api/cpc/sms/outbox/")
+    suspend fun getOutgoingSms(): Response<OutgoingSmsResponse>
+
+    // 발송 결과 서버에 보고
+    @POST("api/cpc/sms/outbox/{id}/result/")
+    suspend fun reportSmsResult(
+        @Path("id") id: Int,
+        @Body result: SmsSendResult
+    ): Response<Void>
+
+    // MMS 수신 정보 서버에 전송 (텍스트 + 이미지)
+    @Multipart
+    @POST("api/cpc/mms/receive/")
+    suspend fun sendMmsToServer(
+        @Part("csphone_number") csPhoneNumber: RequestBody,
+        @Part("checkphone_number") senderNumber: RequestBody,
+        @Part("message") message: RequestBody,
+        @Part("receive_time") receiveTime: RequestBody,
+        @Part images: List<MultipartBody.Part>
+    ): Response<Void>
 
 }
 
