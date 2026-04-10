@@ -41,14 +41,16 @@ class SmsNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.d(TAG, "NotificationListener 연결됨 - 폴링 시작")
+        Log.d(TAG, "NotificationListener 연결됨 - 폴링 + Heartbeat 시작")
         startPolling()
+        HeartbeatManager.start(applicationContext)
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.d(TAG, "NotificationListener 연결 해제")
         pollingJob?.cancel()
+        HeartbeatManager.stop()
     }
 
     private fun startPolling() {

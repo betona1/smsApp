@@ -56,6 +56,12 @@ interface ApiService {
         @Body result: SmsSendResult
     ): Response<Void>
 
+    // 디바이스 Heartbeat (30초마다 전송)
+    @POST("api/cpc/sms/devices/heartbeat/")
+    suspend fun sendHeartbeat(
+        @Body request: HeartbeatRequest
+    ): Response<HeartbeatResponse>
+
     // MMS 수신 정보 서버에 전송 (텍스트 + 이미지)
     @Multipart
     @POST("api/cpc/mms/receive/")

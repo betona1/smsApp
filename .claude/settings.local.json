@@ -23,7 +23,8 @@
       "Bash(python -c \"import pymysql; print\\('pymysql available'\\)\")",
       "Bash(python:*)",
       "Read(//tmp/**)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(adb:*)"
     ]
   }
 }
