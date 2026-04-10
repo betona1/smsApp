@@ -24,7 +24,10 @@
       "Bash(python:*)",
       "Read(//tmp/**)",
       "Bash(xargs grep:*)",
-      "Bash(adb:*)"
+      "Bash(adb:*)",
+      "Bash(tasklist //FI \"IMAGENAME eq adb.exe\")",
+      "Bash(taskkill //F //PID 47744)",
+      "Bash(taskkill //F //PID 32692)"
     ]
   }
 }

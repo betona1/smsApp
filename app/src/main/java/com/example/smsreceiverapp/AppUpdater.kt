@@ -135,47 +135,67 @@ object AppUpdater {
     }
 
     private fun downloadAndInstall(context: Context, url: String, version: String) {
+        val appContext = context.applicationContext
         val fileName = "SmsReceiverApp-v$version.apk"
 
-        // 기존 파일 삭제
-        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+        val file = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+
+        // 이미 받은 파일이 있고 정상 크기면 바로 설치
+        if (file.exists() && file.length() > 100000) {
+            Log.d(TAG, "기존 APK 발견, 바로 설치")
+            installApk(appContext, file)
+            return
+        }
         if (file.exists()) file.delete()
 
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             setTitle("SMS Receiver App 업데이트")
             setDescription("v$version 다운로드 중...")
-            setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+            setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, fileName)
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         }
 
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val dm = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = dm.enqueue(request)
 
-        // 다운로드 완료 후 설치
+        // 다운로드 완료 후 설치 - ApplicationContext 사용해야 leak 안 남
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                 if (id == downloadId) {
                     Log.d(TAG, "다운로드 완료, 설치 시작")
-                    installApk(context, file)
+                    installApk(appContext, file)
                     try {
-                        context.unregisterReceiver(this)
+                        appContext.unregisterReceiver(this)
                     } catch (_: Exception) {}
                 }
             }
         }
 
-        context.registerReceiver(
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            Context.RECEIVER_NOT_EXPORTED
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                Context.RECEIVER_EXPORTED
+            )
+        } else {
+            appContext.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
+        }
 
         Log.d(TAG, "APK 다운로드 시작: $fileName")
     }
 
     private fun installApk(context: Context, file: File) {
         try {
+            if (!file.exists()) {
+                Log.e(TAG, "APK 파일 없음: ${file.absolutePath}")
+                return
+            }
+            Log.d(TAG, "APK 설치 시도: ${file.absolutePath} (${file.length()} bytes)")
+
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -187,8 +207,9 @@ object AppUpdater {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
             context.startActivity(intent)
+            Log.d(TAG, "APK 설치 화면 열림")
         } catch (e: Exception) {
-            Log.e(TAG, "APK 설치 실패: ${e.message}")
+            Log.e(TAG, "APK 설치 실패: ${e.message}", e)
         }
     }
 }
