@@ -62,6 +62,12 @@ interface ApiService {
         @Body request: HeartbeatRequest
     ): Response<HeartbeatResponse>
 
+    // 디바이스 폰번호 변경 (고스트 레코드 방지)
+    @POST("api/cpc/sms/devices/change-number/")
+    suspend fun changePhoneNumber(
+        @Body request: ChangePhoneNumberRequest
+    ): Response<ChangePhoneNumberResponse>
+
     // MMS 수신 정보 서버에 전송 (텍스트 + 이미지)
     @Multipart
     @POST("api/cpc/mms/receive/")

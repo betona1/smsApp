@@ -14,7 +14,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,20 +84,54 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                     Spacer(Modifier.height(12.dp))
 
+                    var saving by remember { mutableStateOf(false) }
                     Button(
                         onClick = {
                             val cleaned = myPhone.trim().replace("-", "").replace(" ", "")
-                            if (cleaned.isNotBlank()) {
-                                savePhoneNumber(context, cleaned)
-                                myPhone = cleaned
-                                Toast.makeText(context, "전화번호 저장 완료: $cleaned", Toast.LENGTH_LONG).show()
-                            } else {
+                            if (cleaned.isBlank()) {
                                 Toast.makeText(context, "전화번호를 입력해주세요", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val oldPhone = loadPhoneNumber(context) ?: ""
+                            if (oldPhone == cleaned) {
+                                Toast.makeText(context, "변경 없음", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            saving = true
+                            scope.launch {
+                                try {
+                                    if (oldPhone.isNotBlank()) {
+                                        // 서버에 변경 요청 (고스트 레코드 방지)
+                                        val response = withContext(Dispatchers.IO) {
+                                            RetrofitClient.getApi(context).changePhoneNumber(
+                                                ChangePhoneNumberRequest(old_phone = oldPhone, new_phone = cleaned)
+                                            )
+                                        }
+                                        if (response.isSuccessful) {
+                                            val action = response.body()?.action ?: "?"
+                                            savePhoneNumber(context, cleaned)
+                                            myPhone = cleaned
+                                            Toast.makeText(context, "변경 완료 ($action): $cleaned", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "서버 변경 실패: ${response.code()}", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        // 최초 입력은 그냥 저장
+                                        savePhoneNumber(context, cleaned)
+                                        myPhone = cleaned
+                                        Toast.makeText(context, "전화번호 저장 완료: $cleaned", Toast.LENGTH_LONG).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "오류: ${e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    saving = false
+                                }
                             }
                         },
+                        enabled = !saving,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("전화번호 저장")
+                        Text(if (saving) "변경 중..." else "전화번호 저장")
                     }
                 }
             }
