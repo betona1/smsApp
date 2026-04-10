@@ -13,14 +13,27 @@ object RetrofitClient {
     private var currentBaseUrl: String? = null
     private var apiInstance: ApiService? = null
 
-    // 서버에서 Boolean을 0/1 숫자로 보내는 경우 처리
+    // 서버에서 Boolean을 0/1 숫자 또는 true/false 둘 다 처리
+    private val booleanDeserializer = JsonDeserializer<Boolean> { json, _, _ ->
+        try {
+            val prim = json.asJsonPrimitive
+            when {
+                prim.isBoolean -> prim.asBoolean
+                prim.isNumber -> prim.asInt != 0
+                prim.isString -> {
+                    val s = prim.asString.lowercase()
+                    s == "true" || s == "1"
+                }
+                else -> false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private val gson = GsonBuilder()
-        .registerTypeAdapter(Boolean::class.java, JsonDeserializer<Boolean> { json, _, _ ->
-            json.asInt != 0
-        })
-        .registerTypeAdapter(Boolean::class.javaPrimitiveType, JsonDeserializer<Boolean> { json, _, _ ->
-            json.asInt != 0
-        })
+        .registerTypeAdapter(Boolean::class.java, booleanDeserializer)
+        .registerTypeAdapter(Boolean::class.javaPrimitiveType, booleanDeserializer)
         .create()
 
     fun getApi(context: Context): ApiService {
