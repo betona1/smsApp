@@ -83,7 +83,7 @@ class SmsSenderWorker(
                 return@withContext Result.retry()
             }
 
-            val smsList = response.body()?.items.orEmpty()
+            val smsList = response.body().orEmpty()
             Log.d(TAG, "발송 대기 문자 ${smsList.size}건")
 
             if (smsList.isEmpty()) {

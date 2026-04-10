@@ -47,7 +47,7 @@ interface ApiService {
 
     // 서버에서 발송 대기 중인 문자 목록 조회
     @GET("api/cpc/sms/outbox/")
-    suspend fun getOutgoingSms(): Response<OutgoingSmsResponse>
+    suspend fun getOutgoingSms(): Response<List<OutgoingSms>>
 
     // 발송 결과 서버에 보고
     @POST("api/cpc/sms/outbox/{id}/result/")

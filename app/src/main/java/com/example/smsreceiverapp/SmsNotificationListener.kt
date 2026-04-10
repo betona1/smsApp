@@ -77,7 +77,7 @@ class SmsNotificationListener : NotificationListenerService() {
         val response = api.getOutgoingSms()
         if (!response.isSuccessful) return
 
-        val smsList = response.body()?.items.orEmpty()
+        val smsList = response.body().orEmpty()
         if (smsList.isEmpty()) return
 
         Log.d(TAG, "발송 대기 ${smsList.size}건")

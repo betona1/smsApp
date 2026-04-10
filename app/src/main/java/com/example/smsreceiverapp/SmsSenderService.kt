@@ -160,7 +160,7 @@ class SmsSenderService : Service() {
             return
         }
 
-        val smsList = response.body()?.items.orEmpty()
+        val smsList = response.body().orEmpty()
         if (smsList.isEmpty()) return
 
         Log.d(TAG, "발송 대기 문자 ${smsList.size}건")
