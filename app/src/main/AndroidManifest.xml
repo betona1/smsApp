@@ -79,11 +79,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- 5. SMS 브로드캐스트 리시버 -->
+        <!-- 5. SMS 브로드캐스트 리시버 (비활성화 - NotificationListener만 사용) -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true"
-            android:enabled="true"
+            android:enabled="false"
             android:permission="android.permission.BROADCAST_SMS"
             tools:ignore="MissingClass">
             <intent-filter android:priority="999">

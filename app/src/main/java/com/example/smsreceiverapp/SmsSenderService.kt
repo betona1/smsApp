@@ -56,7 +56,8 @@ class SmsSenderService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("문자 수신/발송 대기 중..."))
         acquireLocks()
-        registerContentObserver()
+        // ContentObserver 비활성화 - NotificationListener만 사용 (폭주 방지)
+        // registerContentObserver()
         Log.d(TAG, "서비스 생성됨 (WakeLock 활성)")
     }
 
@@ -68,7 +69,7 @@ class SmsSenderService : Service() {
     override fun onDestroy() {
         pollingJob?.cancel()
         serviceScope.cancel()
-        unregisterContentObserver()
+        // unregisterContentObserver()  // 비활성화
         releaseLocks()
         Log.d(TAG, "서비스 종료됨")
         super.onDestroy()
