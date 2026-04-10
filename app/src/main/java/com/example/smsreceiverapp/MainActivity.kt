@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
         add(Manifest.permission.READ_SMS)
         add(Manifest.permission.SEND_SMS)
         add(Manifest.permission.RECEIVE_MMS)
+        add(Manifest.permission.READ_PHONE_STATE)
+        add(Manifest.permission.READ_PHONE_NUMBERS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -174,7 +176,9 @@ fun loadPhoneNumber(context: Context): String? {
 @Composable
 fun PhoneNumberInputScreen(onSaved: () -> Unit) {
     val context = LocalContext.current
-    var phoneNumber by remember { mutableStateOf(TextFieldValue("")) }
+    // 자동으로 폰 번호 가져오기 시도
+    val initialNumber = remember { tryGetDeviceNumber(context) }
+    var phoneNumber by remember { mutableStateOf(TextFieldValue(initialNumber)) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -182,15 +186,55 @@ fun PhoneNumberInputScreen(onSaved: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text("내 핸드폰 번호 입력", fontSize = 18.sp)
+        if (initialNumber.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "자동 감지됨 (확인 후 저장)",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+        }
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it })
+        OutlinedTextField(
+            value = phoneNumber,
+            onValueChange = { phoneNumber = it },
+            placeholder = { Text("01012345678") },
+            singleLine = true
+        )
         Spacer(Modifier.height(12.dp))
         Button(onClick = {
-            savePhoneNumber(context, phoneNumber.text)
-            onSaved()
+            val cleaned = phoneNumber.text.trim().replace("-", "").replace(" ", "")
+            if (cleaned.isNotBlank()) {
+                savePhoneNumber(context, cleaned)
+                onSaved()
+            }
         }) {
             Text("번호 저장")
         }
+    }
+}
+
+@Suppress("HardwareIds", "MissingPermission")
+fun tryGetDeviceNumber(context: Context): String {
+    return try {
+        if (ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_PHONE_NUMBERS
+            ) != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.READ_PHONE_STATE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return ""
+
+        val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+        val raw = tm.line1Number ?: ""
+        // +82 → 0 변환
+        when {
+            raw.startsWith("+82") -> "0" + raw.removePrefix("+82").replace("-", "").trim()
+            raw.startsWith("82") && raw.length == 12 -> "0" + raw.substring(2)
+            else -> raw.replace("-", "").replace(" ", "").trim()
+        }
+    } catch (e: Exception) {
+        ""
     }
 }
 

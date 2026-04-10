@@ -22,6 +22,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // 전화번호 설정
+    var myPhone by remember { mutableStateOf(loadPhoneNumber(context) ?: "") }
+
     // API 서버 설정
     var apiHost by remember { mutableStateOf(Prefs.getApiHost(context)) }
     var apiPort by remember { mutableStateOf(Prefs.getApiPort(context)) }
@@ -53,6 +56,53 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
+            // ========== 내 전화번호 ==========
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "[ 내 전화번호 ]",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = myPhone,
+                        onValueChange = { myPhone = it },
+                        label = { Text("전화번호") },
+                        placeholder = { Text("01012345678") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val cleaned = myPhone.trim().replace("-", "").replace(" ", "")
+                            if (cleaned.isNotBlank()) {
+                                savePhoneNumber(context, cleaned)
+                                myPhone = cleaned
+                                Toast.makeText(context, "전화번호 저장 완료: $cleaned", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "전화번호를 입력해주세요", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("전화번호 저장")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ========== API 서버 ==========
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
