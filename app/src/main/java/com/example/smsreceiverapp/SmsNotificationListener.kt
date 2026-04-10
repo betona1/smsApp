@@ -180,24 +180,37 @@ class SmsNotificationListener : NotificationListenerService() {
     }
 
     private suspend fun sendSmsToServer(myPhone: String, sender: String, message: String, msgType: String) {
-        try {
-            val request = ReceivedSMSRequest(
-                csphone_number = myPhone,
-                checkphone_number = sender,
-                message = message,
-                receive_time = System.currentTimeMillis()
-            )
-            val response = RetrofitClient.getApi(applicationContext).sendReceivedSMS(request)
-            if (response.isSuccessful) {
-                AppLog.server("$msgType 서버 전송 OK [$sender]")
-                Log.d(TAG, "서버 전송 성공: ${response.code()}")
-            } else {
-                AppLog.error("$msgType 서버 전송 실패: ${response.code()}")
+        // 정책: 30초 내 3회 시도, 초과 시 drop
+        val request = ReceivedSMSRequest(
+            csphone_number = myPhone,
+            checkphone_number = sender,
+            message = message,
+            receive_time = System.currentTimeMillis()
+        )
+
+        val deadline = System.currentTimeMillis() + 30000L
+        // 지수 백오프: 0초, 5초, 10초 (총 15초 + HTTP 시간 ≤ 30초)
+        val backoffs = longArrayOf(0L, 5000L, 10000L)
+
+        for ((attempt, wait) in backoffs.withIndex()) {
+            if (wait > 0) delay(wait)
+            if (System.currentTimeMillis() > deadline) {
+                Log.e(TAG, "SMS 전송 deadline 초과 → drop")
+                return
             }
-        } catch (e: Exception) {
-            AppLog.error("서버 전송 오류: ${e.message}")
-            Log.e(TAG, "서버 전송 오류: ${e.message}")
+            try {
+                val response = RetrofitClient.getApi(applicationContext).sendReceivedSMS(request)
+                if (response.isSuccessful) {
+                    Log.d(TAG, "서버 전송 성공 (시도 ${attempt + 1}/3): ${response.code()}")
+                    return
+                } else {
+                    Log.e(TAG, "서버 전송 실패 (시도 ${attempt + 1}/3): ${response.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "서버 전송 오류 (시도 ${attempt + 1}/3): ${e.message}")
+            }
         }
+        Log.e(TAG, "SMS 전송 3회 모두 실패 → drop")
     }
 
     private fun extractNotificationImage(extras: Bundle): Bitmap? {
@@ -240,30 +253,41 @@ class SmsNotificationListener : NotificationListenerService() {
         myPhone: String, sender: String, message: String,
         images: List<Pair<ByteArray, String>>
     ) {
-        try {
-            val api = RetrofitClient.getApi(applicationContext)
-            val csPhoneBody = myPhone.toRequestBody("text/plain".toMediaTypeOrNull())
-            val senderBody = sender.toRequestBody("text/plain".toMediaTypeOrNull())
-            val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
-            val timeBody = System.currentTimeMillis().toString()
-                .toRequestBody("text/plain".toMediaTypeOrNull())
+        // 정책: 30초 내 3회 시도, 초과 시 drop
+        val deadline = System.currentTimeMillis() + 30000L
+        val backoffs = longArrayOf(0L, 5000L, 10000L)
+        val timestamp = System.currentTimeMillis().toString()
 
-            val imageBodies = images.mapIndexed { index, (data, mimeType) ->
-                val requestBody = data.toRequestBody(mimeType.toMediaTypeOrNull())
-                MultipartBody.Part.createFormData("images", "mms_image_${index}.jpg", requestBody)
+        for ((attempt, wait) in backoffs.withIndex()) {
+            if (wait > 0) delay(wait)
+            if (System.currentTimeMillis() > deadline) {
+                Log.e(TAG, "MMS 전송 deadline 초과 → drop")
+                return
             }
+            try {
+                val api = RetrofitClient.getApi(applicationContext)
+                val csPhoneBody = myPhone.toRequestBody("text/plain".toMediaTypeOrNull())
+                val senderBody = sender.toRequestBody("text/plain".toMediaTypeOrNull())
+                val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
+                val timeBody = timestamp.toRequestBody("text/plain".toMediaTypeOrNull())
 
-            val response = api.sendMmsToServer(csPhoneBody, senderBody, messageBody, timeBody, imageBodies)
-            if (response.isSuccessful) {
-                AppLog.server("MMS 서버 전송 OK [$sender] 이미지 ${images.size}장")
-                Log.d(TAG, "MMS multipart 전송 성공: ${response.code()}")
-            } else {
-                AppLog.error("MMS 서버 전송 실패: ${response.code()}")
+                val imageBodies = images.mapIndexed { index, (data, mimeType) ->
+                    val requestBody = data.toRequestBody(mimeType.toMediaTypeOrNull())
+                    MultipartBody.Part.createFormData("images", "mms_image_${index}.jpg", requestBody)
+                }
+
+                val response = api.sendMmsToServer(csPhoneBody, senderBody, messageBody, timeBody, imageBodies)
+                if (response.isSuccessful) {
+                    Log.d(TAG, "MMS 전송 성공 (시도 ${attempt + 1}/3): ${response.code()}")
+                    return
+                } else {
+                    Log.e(TAG, "MMS 전송 실패 (시도 ${attempt + 1}/3): ${response.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "MMS 전송 오류 (시도 ${attempt + 1}/3): ${e.message}")
             }
-        } catch (e: Exception) {
-            AppLog.error("MMS 전송 오류: ${e.message}")
-            Log.e(TAG, "MMS 전송 오류: ${e.message}")
         }
+        Log.e(TAG, "MMS 전송 3회 모두 실패 → drop")
     }
 
     private suspend fun sendMmsFromContentProvider(myPhone: String, sender: String, notifMessage: String) {
