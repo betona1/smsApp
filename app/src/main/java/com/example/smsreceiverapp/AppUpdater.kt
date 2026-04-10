@@ -39,8 +39,26 @@ object AppUpdater {
         Log.d(TAG, "자동 업데이트 체크 시작 (1시간 간격)")
     }
 
+    data class UpdateInfo(
+        val currentVersion: String,
+        val latestVersion: String,
+        val hasUpdate: Boolean,
+        val downloadUrl: String? = null,
+        val error: String? = null
+    )
+
     suspend fun checkForUpdate(context: Context): Boolean {
+        val info = checkUpdateInfo(context)
+        if (info.hasUpdate && info.downloadUrl != null) {
+            downloadAndInstall(context, info.downloadUrl, info.latestVersion)
+            return true
+        }
+        return false
+    }
+
+    suspend fun checkUpdateInfo(context: Context): UpdateInfo {
         return withContext(Dispatchers.IO) {
+            val currentVersion = getCurrentVersion(context)
             try {
                 val url = URL("https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest")
                 val conn = url.openConnection() as HttpURLConnection
@@ -50,42 +68,45 @@ object AppUpdater {
                 conn.readTimeout = 10000
 
                 if (conn.responseCode != 200) {
-                    Log.e(TAG, "GitHub API 응답 실패: ${conn.responseCode}")
-                    return@withContext false
+                    return@withContext UpdateInfo(currentVersion, "?", false, null, "응답 실패: ${conn.responseCode}")
                 }
 
                 val response = conn.inputStream.bufferedReader().readText()
                 val json = org.json.JSONObject(response)
-                val latestTag = json.getString("tag_name") // "v1.0.1"
-                val latestVersion = latestTag.removePrefix("v") // "1.0.1"
+                val latestTag = json.getString("tag_name")
+                val latestVersion = latestTag.removePrefix("v")
 
-                val currentVersion = getCurrentVersion(context)
                 Log.d(TAG, "현재 버전: $currentVersion, 최신 버전: $latestVersion")
 
-                if (isNewerVersion(currentVersion, latestVersion)) {
-                    // APK 다운로드 URL 찾기
+                val hasUpdate = isNewerVersion(currentVersion, latestVersion)
+                var downloadUrl: String? = null
+
+                if (hasUpdate) {
                     val assets = json.getJSONArray("assets")
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
-                        val name = asset.getString("name")
-                        if (name.endsWith(".apk")) {
-                            val downloadUrl = asset.getString("browser_download_url")
-                            Log.d(TAG, "새 버전 발견: $latestVersion, 다운로드: $downloadUrl")
-                            downloadAndInstall(context, downloadUrl, latestVersion)
-                            return@withContext true
+                        if (asset.getString("name").endsWith(".apk")) {
+                            downloadUrl = asset.getString("browser_download_url")
+                            break
                         }
                     }
-                } else {
-                    Log.d(TAG, "최신 버전 사용 중")
                 }
 
-                false
+                UpdateInfo(currentVersion, latestVersion, hasUpdate, downloadUrl)
             } catch (e: Exception) {
                 Log.e(TAG, "업데이트 확인 오류: ${e.message}")
-                false
+                UpdateInfo(currentVersion, "?", false, null, e.message)
             }
         }
     }
+
+    fun installUpdate(context: Context, info: UpdateInfo) {
+        if (info.downloadUrl != null) {
+            downloadAndInstall(context, info.downloadUrl, info.latestVersion)
+        }
+    }
+
+    fun getCurrentVersionPublic(context: Context): String = getCurrentVersion(context)
 
     private fun getCurrentVersion(context: Context): String {
         return try {
