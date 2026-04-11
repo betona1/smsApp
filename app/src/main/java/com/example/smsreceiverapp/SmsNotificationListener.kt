@@ -7,12 +7,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.telephony.SmsManager
-import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
@@ -20,9 +17,6 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class SmsNotificationListener : NotificationListenerService() {
 
@@ -39,121 +33,18 @@ class SmsNotificationListener : NotificationListenerService() {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var pollingJob: Job? = null
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.d(TAG, "NotificationListener 연결됨 - 폴링 + Heartbeat 시작")
-        startPolling()
+        // outbox 폴링은 SmsSenderService가 단독 담당 (중복 발송 방지)
+        Log.d(TAG, "NotificationListener 연결됨 - Heartbeat 시작")
         HeartbeatManager.start(applicationContext)
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.d(TAG, "NotificationListener 연결 해제")
-        pollingJob?.cancel()
         HeartbeatManager.stop()
-    }
-
-    private fun startPolling() {
-        pollingJob?.cancel()
-        pollingJob = scope.launch {
-            while (isActive) {
-                try {
-                    pollAndSend()
-                } catch (e: Exception) {
-                    Log.e(TAG, "폴링 오류: ${e.message}")
-                }
-                delay(5000) // 5초
-            }
-        }
-    }
-
-    /**
-     * Android 12+ 대응 SmsManager 안전 획득.
-     * `Context.getSystemService(SmsManager::class.java)` 는 기본 SMS 구독이 없을 때 null 가능.
-     */
-    private fun getSmsManagerSafe(): SmsManager? {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val subId = SubscriptionManager.getDefaultSmsSubscriptionId()
-                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                    applicationContext.getSystemService(SmsManager::class.java)
-                        ?.createForSubscriptionId(subId)
-                } else {
-                    applicationContext.getSystemService(SmsManager::class.java)
-                }
-            } else {
-                @Suppress("DEPRECATION")
-                SmsManager.getDefault()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "SmsManager 획득 실패: ${e.message}")
-            null
-        }
-    }
-
-    private suspend fun pollAndSend() {
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.SEND_SMS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        val api = RetrofitClient.getApi(applicationContext)
-        val response = api.getOutgoingSms()
-        if (!response.isSuccessful) return
-
-        val smsList = response.body().orEmpty()
-        if (smsList.isEmpty()) return
-
-        Log.d(TAG, "발송 대기 ${smsList.size}건")
-        val smsManager = getSmsManagerSafe()
-        if (smsManager == null) {
-            Log.e(TAG, "SmsManager null — 전체 발송 실패 처리")
-            for (sms in smsList) {
-                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                try {
-                    api.reportSmsResult(
-                        sms.id,
-                        SmsSendResult(
-                            id = sms.id,
-                            status = "failed",
-                            error_message = "SmsManager 초기화 실패 (기본 SMS 앱 설정 및 SEND_SMS 권한 확인)",
-                            sent_at = now
-                        )
-                    )
-                } catch (_: Exception) {}
-            }
-            return
-        }
-
-        for (sms in smsList) {
-            try {
-                if (sms.message.isBlank()) {
-                    val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                    api.reportSmsResult(sms.id, SmsSendResult(id = sms.id, status = "failed", error_message = "빈 메시지", sent_at = now))
-                    continue
-                }
-                Log.d(TAG, "발송: ${sms.phone_number} - ${sms.message.take(30)}")
-
-                val parts = smsManager.divideMessage(sms.message)
-                if (parts.size > 1) {
-                    smsManager.sendMultipartTextMessage(sms.phone_number, null, parts, null, null)
-                } else {
-                    smsManager.sendTextMessage(sms.phone_number, null, sms.message, null, null)
-                }
-
-                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                api.reportSmsResult(sms.id, SmsSendResult(id = sms.id, status = "sent", sent_at = now))
-                Log.d(TAG, "발송 성공: ID=${sms.id}")
-            } catch (e: Exception) {
-                Log.e(TAG, "발송 실패: ID=${sms.id} - ${e.message}")
-                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                try {
-                    api.reportSmsResult(sms.id, SmsSendResult(id = sms.id, status = "failed", error_message = e.message, sent_at = now))
-                } catch (_: Exception) {}
-            }
-        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -485,7 +376,6 @@ class SmsNotificationListener : NotificationListenerService() {
     }
 
     override fun onDestroy() {
-        pollingJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -494,8 +384,9 @@ class SmsNotificationListener : NotificationListenerService() {
      * 알림에서 발신자 전화번호를 추출합니다.
      * 1순위: MessagingStyle.sender (숫자를 포함한 경우에만)
      * 2순위: EXTRA_PEOPLE tel: URI
-     * 3순위: content://sms/inbox 최근 3건에서 body 매칭 (Samsung Messages 대응)
-     * 4순위: 알림 title (fallback — 연락처 이름이라도 반환)
+     * 3순위: content://sms/inbox 최근 3건에서 body 매칭 (Samsung Messages SMS 대응)
+     * 4순위: content://mms 최근 1건 + addr 테이블 조회 (Samsung Messages MMS 이미지 대응)
+     * 5순위: 알림 title (fallback — 연락처 이름이라도 반환)
      */
     private fun extractRealPhoneNumber(
         extras: Bundle,
@@ -520,13 +411,14 @@ class SmsNotificationListener : NotificationListenerService() {
             }
         }
 
+        val hasReadSms = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+
         // ── 3순위: Content Provider (content://sms/inbox) 최근 3건 조회 ──
         // Samsung 메시지 앱이 알림에 번호를 안 담는 경우 SMS DB에서 직접 읽음
-        try {
-            if (ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.READ_SMS
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
+        if (hasReadSms) {
+            try {
                 val uri = Uri.parse("content://sms/inbox")
                 val cursor = contentResolver.query(
                     uri,
@@ -544,12 +436,46 @@ class SmsNotificationListener : NotificationListenerService() {
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "content://sms/inbox 조회 실패: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "content://sms/inbox 조회 실패: ${e.message}")
+
+            // ── 4순위: content://mms 최근 1건의 addr(type=137) 조회 ──
+            // MMS 이미지의 경우 SMS inbox 에는 없고 알림 본문이 "이미지" 1글자라 3순위가 실패함
+            try {
+                val cutoff = (System.currentTimeMillis() / 1000) - 120 // 최근 2분
+                val cursor = contentResolver.query(
+                    Uri.parse("content://mms"),
+                    arrayOf("_id", "date"),
+                    "date > ? AND msg_box = 1",
+                    arrayOf(cutoff.toString()),
+                    "_id DESC LIMIT 1"
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val mmsId = it.getString(0)
+                        val addrCursor = contentResolver.query(
+                            Uri.parse("content://mms/$mmsId/addr"),
+                            arrayOf("address", "type"),
+                            "type=137", // 137 = PduHeaders.FROM (발신자)
+                            null, null
+                        )
+                        addrCursor?.use { ac ->
+                            if (ac.moveToFirst()) {
+                                val addr = ac.getString(0)
+                                if (!addr.isNullOrBlank() && addr.any { c -> c.isDigit() }) {
+                                    return normalizePhoneNumber(addr)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "content://mms 조회 실패: ${e.message}")
+            }
         }
 
-        // ── 4순위: title (연락처 이름이라도 반환 — 최후 수단) ──
+        // ── 5순위: title (연락처 이름이라도 반환 — 최후 수단) ──
         Log.w(TAG, "전화번호 추출 실패, title 사용: $titleFallback")
         return normalizePhoneNumber(titleFallback).ifBlank { titleFallback }
     }
