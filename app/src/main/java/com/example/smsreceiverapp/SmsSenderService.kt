@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.telephony.SmsManager
+import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -168,7 +169,27 @@ class SmsSenderService : Service() {
         AppLog.send("발송 대기 ${smsList.size}건 수신")
         updateNotification("발송 중... ${smsList.size}건")
 
-        val smsManager = getSystemService(SmsManager::class.java)
+        val smsManager = getSmsManagerSafe()
+        if (smsManager == null) {
+            Log.e(TAG, "SmsManager null — 전체 발송 실패 처리")
+            AppLog.error("SmsManager 초기화 실패")
+            for (sms in smsList) {
+                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
+                try {
+                    api.reportSmsResult(
+                        sms.id,
+                        SmsSendResult(
+                            id = sms.id,
+                            status = "failed",
+                            error_message = "SmsManager 초기화 실패 (기본 SMS 앱 설정 및 SEND_SMS 권한 확인)",
+                            sent_at = now
+                        )
+                    )
+                } catch (_: Exception) {}
+            }
+            updateNotification("문자 수신/발송 대기 중...")
+            return
+        }
 
         for (sms in smsList) {
             try {
@@ -245,5 +266,28 @@ class SmsSenderService : Service() {
     private fun updateNotification(text: String) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    /**
+     * Android 12+ 대응 SmsManager 안전 획득.
+     */
+    private fun getSmsManagerSafe(): SmsManager? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val subId = SubscriptionManager.getDefaultSmsSubscriptionId()
+                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    getSystemService(SmsManager::class.java)
+                        ?.createForSubscriptionId(subId)
+                } else {
+                    getSystemService(SmsManager::class.java)
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "SmsManager 획득 실패: ${e.message}")
+            null
+        }
     }
 }

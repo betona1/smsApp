@@ -3,7 +3,9 @@ package com.example.smsreceiverapp
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.telephony.SmsManager
+import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.work.*
@@ -61,6 +63,29 @@ class SmsSenderWorker(
         }
     }
 
+    /**
+     * Android 12+ 대응 SmsManager 안전 획득.
+     */
+    private fun getSmsManagerSafe(): SmsManager? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val subId = SubscriptionManager.getDefaultSmsSubscriptionId()
+                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    applicationContext.getSystemService(SmsManager::class.java)
+                        ?.createForSubscriptionId(subId)
+                } else {
+                    applicationContext.getSystemService(SmsManager::class.java)
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "SmsManager 획득 실패: ${e.message}")
+            null
+        }
+    }
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "SMS 발송 폴링 시작")
@@ -90,7 +115,25 @@ class SmsSenderWorker(
                 return@withContext Result.success()
             }
 
-            val smsManager = applicationContext.getSystemService(SmsManager::class.java)
+            val smsManager = getSmsManagerSafe()
+            if (smsManager == null) {
+                Log.e(TAG, "SmsManager null — 전체 발송 실패 처리")
+                for (sms in smsList) {
+                    val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
+                    try {
+                        api.reportSmsResult(
+                            sms.id,
+                            SmsSendResult(
+                                id = sms.id,
+                                status = "failed",
+                                error_message = "SmsManager 초기화 실패 (기본 SMS 앱 설정 및 SEND_SMS 권한 확인)",
+                                sent_at = now
+                            )
+                        )
+                    } catch (_: Exception) {}
+                }
+                return@withContext Result.success()
+            }
 
             for (sms in smsList) {
                 try {
