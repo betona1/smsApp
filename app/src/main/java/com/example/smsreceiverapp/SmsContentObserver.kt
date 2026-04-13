@@ -84,8 +84,12 @@ class SmsContentObserver(
                     val sendAll = prefs.getBoolean("send_all_sms", false)
 
                     if (sendAll || shouldSaveSms(sender)) {
-                        sendSmsToServer(myPhone, sender, body, date)
-                        AppLog.server("$msgType 서버 전송 [$sender]")
+                        if (ProcessedMessages.isDuplicate(sender, body)) {
+                            Log.d(TAG, "중복 스킵 (NotificationListener 이미 전송): $sender")
+                        } else {
+                            sendSmsToServer(myPhone, sender, body, date)
+                            AppLog.server("$msgType 서버 전송 [$sender]")
+                        }
                     }
 
                     if (id > lastSmsId) lastSmsId = id
@@ -129,7 +133,9 @@ class SmsContentObserver(
                     val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
                     val myPhone = prefs.getString("my_phone_number", "unknown") ?: "unknown"
 
-                    if (imageParts.isNotEmpty()) {
+                    if (ProcessedMessages.isDuplicate(sender, messageText)) {
+                        Log.d(TAG, "MMS 중복 스킵 (NotificationListener 이미 전송): $sender")
+                    } else if (imageParts.isNotEmpty()) {
                         sendMmsToServer(myPhone, sender, messageText, imageParts)
                         AppLog.server("MMS 서버 전송 [$sender] 이미지 ${imageParts.size}장")
                     } else {
@@ -157,9 +163,10 @@ class SmsContentObserver(
 
     private suspend fun sendSmsToServer(myPhone: String, sender: String, body: String, date: Long) {
         try {
+            // 서버 스키마: csphone_number=발신자, checkphone_number=수신자(내 폰)
             val request = ReceivedSMSRequest(
-                csphone_number = myPhone,
-                checkphone_number = sender,
+                csphone_number = sender,
+                checkphone_number = myPhone,
                 message = body,
                 receive_time = date
             )
@@ -182,8 +189,9 @@ class SmsContentObserver(
     ) {
         try {
             val api = RetrofitClient.getApi(context)
-            val csPhoneBody = myPhone.toRequestBody("text/plain".toMediaTypeOrNull())
-            val senderBody = sender.toRequestBody("text/plain".toMediaTypeOrNull())
+            // 서버 스키마: csphone_number=발신자, checkphone_number=수신자(내 폰)
+            val csPhoneBody = sender.toRequestBody("text/plain".toMediaTypeOrNull())
+            val senderBody = myPhone.toRequestBody("text/plain".toMediaTypeOrNull())
             val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
             val timeBody = System.currentTimeMillis().toString()
                 .toRequestBody("text/plain".toMediaTypeOrNull())

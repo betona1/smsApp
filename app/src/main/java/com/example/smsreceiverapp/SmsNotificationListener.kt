@@ -90,6 +90,9 @@ class SmsNotificationListener : NotificationListenerService() {
 
         Log.d(TAG, "문자 알림: sender=$sender, msg=${realMessage.take(50)}, isMms=$isMms, hasNotifImage=${notifBitmap != null}")
 
+        // ContentObserver 중복 방지용 마킹
+        ProcessedMessages.isDuplicate(sender, realMessage)
+
         if (isMms) {
             scope.launch {
                 if (notifBitmap != null) {

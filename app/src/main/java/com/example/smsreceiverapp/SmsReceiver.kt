@@ -70,9 +70,10 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun sendSMSRequest(context: Context, csPhone: String, sender: String, body: String) {
+        // 서버 스키마: csphone_number=발신자, checkphone_number=수신자(내 폰)
         val request = ReceivedSMSRequest(
-            csphone_number = csPhone,
-            checkphone_number = sender,
+            csphone_number = sender,
+            checkphone_number = csPhone,
             message = body,
             receive_time = System.currentTimeMillis()
         )
