@@ -35,9 +35,19 @@ android {
         buildConfigField("String", "ALERT_DB_PORT", "\"${localProperties["ALERT_DB_PORT"]}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release-keystore.jks")
+            storePassword = "smsapp2026"
+            keyAlias = "smsapp"
+            keyPassword = "smsapp2026"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
