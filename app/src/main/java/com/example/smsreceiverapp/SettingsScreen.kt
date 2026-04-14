@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -26,6 +27,10 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     // 전화번호 설정
     var myPhone by remember { mutableStateOf(loadPhoneNumber(context) ?: "") }
+
+    // 모두 보내기 설정
+    val settingsPrefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    var sendAllSms by remember { mutableStateOf(settingsPrefs.getBoolean("send_all_sms", false)) }
 
     // API 서버 설정
     var apiHost by remember { mutableStateOf(Prefs.getApiHost(context)) }
@@ -132,6 +137,59 @@ fun SettingsScreen(onBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (saving) "변경 중..." else "전화번호 저장")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ========== 모두 보내기 ==========
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "[ 문자 전송 설정 ]",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "모두 보내기",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                if (sendAllSms) "수신된 모든 문자를 서버로 전송합니다"
+                                else "등록된 번호의 문자만 서버로 전송합니다",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = sendAllSms,
+                            onCheckedChange = { checked ->
+                                sendAllSms = checked
+                                settingsPrefs.edit().putBoolean("send_all_sms", checked).apply()
+                                Toast.makeText(
+                                    context,
+                                    if (checked) "모든 문자 서버 전송 ON" else "등록 번호만 전송",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
                     }
                 }
             }
