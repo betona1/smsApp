@@ -8,7 +8,18 @@ data class HeartbeatRequest(
 data class HeartbeatResponse(
     val ok: Boolean,
     val connected: Boolean,
+    val is_notify_telegram: Boolean = true,
     val server_time: String? = null
+)
+
+data class TelegramToggleRequest(
+    val phone_number: String,
+    val enabled: Boolean
+)
+
+data class TelegramToggleResponse(
+    val ok: Boolean,
+    val is_notify_telegram: Boolean
 )
 
 data class ChangePhoneNumberRequest(

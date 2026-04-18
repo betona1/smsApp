@@ -62,6 +62,12 @@ interface ApiService {
         @Body request: HeartbeatRequest
     ): Response<HeartbeatResponse>
 
+    // 텔레그램 알림 ON/OFF 토글
+    @POST("api/cpc/sms/devices/telegram/")
+    suspend fun toggleTelegram(
+        @Body request: TelegramToggleRequest
+    ): Response<TelegramToggleResponse>
+
     // 디바이스 폰번호 변경 (고스트 레코드 방지)
     @POST("api/cpc/sms/devices/change-number/")
     suspend fun changePhoneNumber(

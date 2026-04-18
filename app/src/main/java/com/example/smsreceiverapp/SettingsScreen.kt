@@ -39,6 +39,28 @@ fun SettingsScreen(onBack: () -> Unit) {
     // 현재 적용 중인 URL 표시용
     var currentApiUrl by remember { mutableStateOf(Prefs.getBaseUrl(context)) }
 
+    // 텔레그램 알림 설정
+    var telegramEnabled by remember { mutableStateOf(true) }
+    var telegramLoading by remember { mutableStateOf(true) }
+
+    // 서버에서 현재 텔레그램 상태 로드
+    LaunchedEffect(Unit) {
+        val phone = loadPhoneNumber(context) ?: ""
+        if (phone.isNotBlank()) {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    RetrofitClient.getApi(context).sendHeartbeat(
+                        HeartbeatRequest(phone_number = phone)
+                    )
+                }
+                if (response.isSuccessful) {
+                    telegramEnabled = response.body()?.is_notify_telegram ?: true
+                }
+            } catch (_: Exception) {}
+        }
+        telegramLoading = false
+    }
+
     // 업데이트 상태
     val currentVersion = remember { AppUpdater.getCurrentVersionPublic(context) }
     var checking by remember { mutableStateOf(false) }
@@ -188,6 +210,82 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     if (checked) "모든 문자 서버 전송 ON" else "등록 번호만 전송",
                                     Toast.LENGTH_SHORT
                                 ).show()
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ========== 텔레그램 알림 ==========
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "[ 텔레그램 알림 ]",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "문자 수신 알림",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                if (telegramLoading) "서버에서 설정 로딩 중..."
+                                else if (telegramEnabled) "수신 문자를 텔레그램으로 알림합니다"
+                                else "텔레그램 알림을 받지 않습니다",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = telegramEnabled,
+                            enabled = !telegramLoading,
+                            onCheckedChange = { checked ->
+                                val phone = loadPhoneNumber(context) ?: ""
+                                if (phone.isBlank()) {
+                                    Toast.makeText(context, "전화번호를 먼저 설정해주세요", Toast.LENGTH_SHORT).show()
+                                    return@Switch
+                                }
+                                telegramEnabled = checked
+                                scope.launch {
+                                    try {
+                                        val response = withContext(Dispatchers.IO) {
+                                            RetrofitClient.getApi(context).toggleTelegram(
+                                                TelegramToggleRequest(phone_number = phone, enabled = checked)
+                                            )
+                                        }
+                                        if (response.isSuccessful) {
+                                            Toast.makeText(
+                                                context,
+                                                if (checked) "텔레그램 알림 ON" else "텔레그램 알림 OFF",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            telegramEnabled = !checked
+                                            Toast.makeText(context, "서버 오류: ${response.code()}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        telegramEnabled = !checked
+                                        Toast.makeText(context, "연결 오류: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }
                         )
                     }
