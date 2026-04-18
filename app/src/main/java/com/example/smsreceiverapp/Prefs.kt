@@ -8,11 +8,17 @@ object Prefs {
     private const val KEY_URL = "base_url"
     private const val DEFAULT_URL = "http://192.168.219.100:8010/"
 
-    // API 서버 설정
+    // API 서버 설정 (내부)
     private const val KEY_API_HOST = "api_host"
     private const val KEY_API_PORT = "api_port"
     private const val DEFAULT_API_HOST = "192.168.219.100"
-    private const val DEFAULT_API_PORT = "8010"
+    private const val DEFAULT_API_PORT = "8379"
+
+    // 외부 서버 설정
+    private const val KEY_EXT_HOST = "ext_api_host"
+    private const val KEY_EXT_PORT = "ext_api_port"
+    private const val DEFAULT_EXT_HOST = "106.247.220.118"
+    private const val DEFAULT_EXT_PORT = "8379"
 
 
     private fun prefs(ctx: Context) =
@@ -43,6 +49,26 @@ object Prefs {
         prefs(ctx).edit {
             putString(KEY_URL, url)
         }
+    }
+
+    // --- 외부 서버 ---
+    fun getExtHost(ctx: Context): String =
+        prefs(ctx).getString(KEY_EXT_HOST, DEFAULT_EXT_HOST) ?: DEFAULT_EXT_HOST
+
+    fun getExtPort(ctx: Context): String =
+        prefs(ctx).getString(KEY_EXT_PORT, DEFAULT_EXT_PORT) ?: DEFAULT_EXT_PORT
+
+    fun setExtServer(ctx: Context, host: String, port: String) {
+        prefs(ctx).edit {
+            putString(KEY_EXT_HOST, host)
+            putString(KEY_EXT_PORT, port)
+        }
+    }
+
+    fun getExtBaseUrl(ctx: Context): String {
+        val host = getExtHost(ctx)
+        val port = getExtPort(ctx)
+        return "http://$host:$port/"
     }
 
 }

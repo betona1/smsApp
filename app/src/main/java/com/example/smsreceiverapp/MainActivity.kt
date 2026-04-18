@@ -242,21 +242,30 @@ fun tryGetDeviceNumber(context: Context): String {
 fun MainScreen(myPhone: String, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
 
-    // 서버 상태
-    var serverConnected by remember { mutableStateOf<Boolean?>(null) }
+    // 서버 상태: "internal" / "external" / "failed" / null(체크중)
+    var connectionState by remember { mutableStateOf<String?>(null) }
     var settingsCount by remember { mutableStateOf(0) }
 
-    // 주기적 서버 상태 체크
+    // 주기적 서버 상태 체크 (내부→외부 페일오버)
     LaunchedEffect(Unit) {
         while (true) {
-            try {
-                val response = withContext(Dispatchers.IO) {
-                    RetrofitClient.getApi(context).getCSPhoneSettings()
+            val ok = RetrofitClient.checkAndSwitch(context)
+            if (ok) {
+                try {
+                    val response = withContext(Dispatchers.IO) {
+                        RetrofitClient.getApi(context).getCSPhoneSettings()
+                    }
+                    if (response.isSuccessful) {
+                        connectionState = if (RetrofitClient.isExternal) "external" else "internal"
+                        settingsCount = response.body()?.size ?: 0
+                    } else {
+                        connectionState = "failed"
+                    }
+                } catch (e: Exception) {
+                    connectionState = "failed"
                 }
-                serverConnected = response.isSuccessful
-                settingsCount = response.body()?.size ?: 0
-            } catch (e: Exception) {
-                serverConnected = false
+            } else {
+                connectionState = "failed"
             }
             delay(30000)
         }
@@ -298,19 +307,21 @@ fun MainScreen(myPhone: String, onOpenSettings: () -> Unit) {
                 .size(100.dp)
                 .clip(CircleShape)
                 .background(
-                    when (serverConnected) {
-                        true -> Color(0xFF4CAF50)
-                        false -> Color(0xFFF44336)
-                        null -> Color(0xFFFF9800)
+                    when (connectionState) {
+                        "internal" -> Color(0xFF4CAF50)  // 초록: 내부
+                        "external" -> Color(0xFF2196F3)  // 파랑: 외부
+                        "failed" -> Color(0xFFF44336)    // 빨강: 실패
+                        else -> Color(0xFFFF9800)        // 주황: 체크중
                     }
                 ),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                when (serverConnected) {
-                    true -> "ON"
-                    false -> "OFF"
-                    null -> "..."
+                when (connectionState) {
+                    "internal" -> "ON"
+                    "external" -> "ON"
+                    "failed" -> "OFF"
+                    else -> "..."
                 },
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -321,16 +332,17 @@ fun MainScreen(myPhone: String, onOpenSettings: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            when (serverConnected) {
-                true -> "서버 연결됨"
-                false -> "서버 연결 안됨"
-                null -> "서버 확인 중..."
+            when (connectionState) {
+                "internal" -> "서버 연결됨 (내부)"
+                "external" -> "서버 연결됨 (외부)"
+                "failed" -> "서버 연결 안됨"
+                else -> "서버 확인 중..."
             },
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold
         )
 
-        if (serverConnected == true) {
+        if (connectionState == "internal" || connectionState == "external") {
             Text(
                 "설정 ${settingsCount}건",
                 fontSize = 13.sp,
@@ -341,7 +353,7 @@ fun MainScreen(myPhone: String, onOpenSettings: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Text(
-            Prefs.getBaseUrl(context),
+            RetrofitClient.activeBaseUrl ?: Prefs.getBaseUrl(context),
             fontSize = 12.sp,
             color = Color.Gray
         )

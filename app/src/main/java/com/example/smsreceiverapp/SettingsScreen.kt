@@ -32,12 +32,16 @@ fun SettingsScreen(onBack: () -> Unit) {
     val settingsPrefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     var sendAllSms by remember { mutableStateOf(settingsPrefs.getBoolean("send_all_sms", false)) }
 
-    // API 서버 설정
+    // API 서버 설정 (내부)
     var apiHost by remember { mutableStateOf(Prefs.getApiHost(context)) }
     var apiPort by remember { mutableStateOf(Prefs.getApiPort(context)) }
 
+    // 외부 서버 설정
+    var extHost by remember { mutableStateOf(Prefs.getExtHost(context)) }
+    var extPort by remember { mutableStateOf(Prefs.getExtPort(context)) }
+
     // 현재 적용 중인 URL 표시용
-    var currentApiUrl by remember { mutableStateOf(Prefs.getBaseUrl(context)) }
+    var currentApiUrl by remember { mutableStateOf(RetrofitClient.activeBaseUrl ?: Prefs.getBaseUrl(context)) }
 
     // 텔레그램 알림 설정
     var telegramEnabled by remember { mutableStateOf(true) }
@@ -316,40 +320,90 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                     Spacer(Modifier.height(12.dp))
 
-                    OutlinedTextField(
-                        value = apiHost,
-                        onValueChange = { apiHost = it },
-                        label = { Text("IP 주소") },
-                        placeholder = { Text("192.168.219.100") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    Text(
+                        "내부 서버 (사무실)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = apiHost,
+                            onValueChange = { apiHost = it },
+                            label = { Text("IP") },
+                            placeholder = { Text("192.168.219.100") },
+                            modifier = Modifier.weight(2f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = apiPort,
+                            onValueChange = { apiPort = it },
+                            label = { Text("포트") },
+                            placeholder = { Text("8379") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
 
-                    OutlinedTextField(
-                        value = apiPort,
-                        onValueChange = { apiPort = it },
-                        label = { Text("포트") },
-                        placeholder = { Text("8010") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    Spacer(Modifier.height(12.dp))
+
+                    Text(
+                        "외부 서버 (공유기)",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = extHost,
+                            onValueChange = { extHost = it },
+                            label = { Text("IP") },
+                            placeholder = { Text("106.247.220.118") },
+                            modifier = Modifier.weight(2f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = extPort,
+                            onValueChange = { extPort = it },
+                            label = { Text("포트") },
+                            placeholder = { Text("8379") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "내부 연결 실패 시 자동으로 외부 서버로 전환됩니다",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                    )
+
                     Spacer(Modifier.height(12.dp))
 
                     Button(
                         onClick = {
                             Prefs.setApiServer(context, apiHost.trim(), apiPort.trim())
+                            Prefs.setExtServer(context, extHost.trim(), extPort.trim())
                             RetrofitClient.reset()
                             currentApiUrl = Prefs.getBaseUrl(context)
                             Toast.makeText(
                                 context,
-                                "API 서버 저장 완료: $currentApiUrl",
+                                "서버 설정 저장 완료",
                                 Toast.LENGTH_LONG
                             ).show()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("API 서버 저장")
+                        Text("서버 설정 저장")
                     }
                 }
             }
