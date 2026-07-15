@@ -22,10 +22,19 @@ object HeartbeatManager {
                 } catch (e: Exception) {
                     Log.e(TAG, "Heartbeat 오류: ${e.message}")
                 }
+                // 워치독: 발송 서비스가 삼성 Doze로 죽었으면 되살림.
+                // NotificationListener(시스템이 유지)가 이 루프를 살려두므로,
+                // 여기서 매 30초 재시작을 보장하면 발송서비스도 안 죽는다.
+                // (이미 살아있으면 startForegroundService는 무해 — onStartCommand 재호출뿐)
+                try {
+                    SmsSenderService.start(context.applicationContext)
+                } catch (e: Exception) {
+                    Log.e(TAG, "발송서비스 워치독 재시작 실패: ${e.message}")
+                }
                 delay(INTERVAL)
             }
         }
-        Log.d(TAG, "Heartbeat 시작 (30초 간격)")
+        Log.d(TAG, "Heartbeat 시작 (30초 간격, 발송서비스 워치독 포함)")
     }
 
     fun stop() {

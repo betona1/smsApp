@@ -37,8 +37,14 @@ class SmsNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         // outbox 폴링은 SmsSenderService가 단독 담당 (중복 발송 방지)
-        Log.d(TAG, "NotificationListener 연결됨 - Heartbeat 시작")
+        Log.d(TAG, "NotificationListener 연결됨 - Heartbeat + 발송서비스 시작")
         HeartbeatManager.start(applicationContext)
+        // 리스너(시스템이 유지)가 붙을 때 발송서비스도 확실히 기동/재기동
+        try {
+            SmsSenderService.start(applicationContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "발송서비스 시작 실패: ${e.message}")
+        }
     }
 
     override fun onListenerDisconnected() {
