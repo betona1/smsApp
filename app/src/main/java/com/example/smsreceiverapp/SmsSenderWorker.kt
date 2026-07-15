@@ -1,7 +1,12 @@
 package com.example.smsreceiverapp
 
 import android.Manifest
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.telephony.SmsManager
@@ -10,11 +15,15 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.work.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.resume
 
 class SmsSenderWorker(
     context: Context,
@@ -86,6 +95,83 @@ class SmsSenderWorker(
         }
     }
 
+    /**
+     * 실제 전송결과(sentIntent)를 기다렸다가 성공/실패를 판정한다.
+     * 멀티파트는 모든 파트가 RESULT_OK여야 성공. 60초 내 결과 미수신 시
+     * 낙관적 성공 처리(중복발송 방지).
+     */
+    private suspend fun sendSmsAndAwait(
+        smsManager: SmsManager,
+        phone: String,
+        message: String,
+        msgId: Int
+    ): Pair<Boolean, String?> {
+        val parts = smsManager.divideMessage(message)
+        val total = if (parts.size > 1) parts.size else 1
+        val action = "com.example.smsreceiverapp.SMS_SENT_W_${msgId}_${System.currentTimeMillis()}"
+        val received = AtomicInteger(0)
+        val ctx = applicationContext
+
+        val result = withTimeoutOrNull(60_000L) {
+            suspendCancellableCoroutine<Pair<Boolean, String?>> { cont ->
+                var anyFail = false
+                var firstError: String? = null
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(c: Context?, intent: Intent?) {
+                        val code = resultCode
+                        if (code != Activity.RESULT_OK) {
+                            anyFail = true
+                            if (firstError == null) firstError = smsErrorReason(code)
+                        }
+                        if (received.incrementAndGet() >= total) {
+                            try { ctx.unregisterReceiver(this) } catch (_: Exception) {}
+                            if (cont.isActive) cont.resume(Pair(!anyFail, firstError))
+                        }
+                    }
+                }
+                ContextCompat.registerReceiver(
+                    ctx, receiver, IntentFilter(action),
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+                )
+                cont.invokeOnCancellation {
+                    try { ctx.unregisterReceiver(receiver) } catch (_: Exception) {}
+                }
+                val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                try {
+                    if (parts.size > 1) {
+                        val sentIntents = ArrayList<PendingIntent>(parts.size)
+                        for (i in parts.indices) {
+                            sentIntents.add(
+                                PendingIntent.getBroadcast(
+                                    ctx, i, Intent(action).setPackage(ctx.packageName), flags
+                                )
+                            )
+                        }
+                        smsManager.sendMultipartTextMessage(phone, null, parts, sentIntents, null)
+                    } else {
+                        val pi = PendingIntent.getBroadcast(
+                            ctx, 0, Intent(action).setPackage(ctx.packageName), flags
+                        )
+                        smsManager.sendTextMessage(phone, null, message, pi, null)
+                    }
+                } catch (e: Exception) {
+                    try { ctx.unregisterReceiver(receiver) } catch (_: Exception) {}
+                    if (cont.isActive) cont.resume(Pair(false, e.message ?: "발송 예외"))
+                }
+            }
+        }
+        return result ?: Pair(true, null)
+    }
+
+    private fun smsErrorReason(code: Int): String = when (code) {
+        SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "일반 발송실패(통신사 차단 가능)"
+        SmsManager.RESULT_ERROR_RADIO_OFF -> "무선(라디오) 꺼짐"
+        SmsManager.RESULT_ERROR_NULL_PDU -> "PDU 없음"
+        SmsManager.RESULT_ERROR_NO_SERVICE -> "서비스 불가(신호 없음)"
+        SmsManager.RESULT_ERROR_LIMIT_EXCEEDED -> "발송한도 초과(통신사 스팸제한)"
+        else -> "발송실패(코드 $code)"
+    }
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "SMS 발송 폴링 시작")
@@ -139,23 +225,23 @@ class SmsSenderWorker(
                 try {
                     Log.d(TAG, "문자 발송 중: ${sms.phone_number} - ${sms.message}")
 
-                    // 긴 메시지 분할 발송
-                    val parts = smsManager.divideMessage(sms.message)
-                    if (parts.size > 1) {
-                        smsManager.sendMultipartTextMessage(
-                            sms.phone_number, null, parts, null, null
-                        )
-                    } else {
-                        smsManager.sendTextMessage(
-                            sms.phone_number, null, sms.message, null, null
-                        )
-                    }
-
-                    // 발송 성공 보고
+                    // sentIntent로 실제 전송결과 확인 후 보고 (fire-and-forget 금지)
+                    val (ok, reason) = sendSmsAndAwait(
+                        smsManager, sms.phone_number, sms.message, sms.id
+                    )
                     val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date())
-                    val result = SmsSendResult(id = sms.id, status = "sent", sent_at = now)
-                    api.reportSmsResult(sms.id, result)
-                    Log.d(TAG, "발송 성공: ID=${sms.id}")
+                    if (ok) {
+                        val result = SmsSendResult(id = sms.id, status = "sent", sent_at = now)
+                        api.reportSmsResult(sms.id, result)
+                        Log.d(TAG, "발송 성공: ID=${sms.id} ${reason ?: ""}")
+                    } else {
+                        val result = SmsSendResult(
+                            id = sms.id, status = "failed",
+                            error_message = reason, sent_at = now
+                        )
+                        api.reportSmsResult(sms.id, result)
+                        Log.e(TAG, "발송 실패(실측): ID=${sms.id} - $reason")
+                    }
 
                 } catch (e: Exception) {
                     Log.e(TAG, "발송 실패: ID=${sms.id} - ${e.message}")
