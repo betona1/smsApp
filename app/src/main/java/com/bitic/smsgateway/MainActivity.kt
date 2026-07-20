@@ -287,7 +287,7 @@ fun MainScreen(myPhone: String, onOpenSettings: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "SMS Receiver",
+                        "SMS Gate",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer

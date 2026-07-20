@@ -151,7 +151,7 @@ object AppUpdater {
         if (file.exists()) file.delete()
 
         val request = DownloadManager.Request(Uri.parse(url)).apply {
-            setTitle("SMS Receiver App 업데이트")
+            setTitle("SMS Gate 업데이트")
             setDescription("v$version 다운로드 중...")
             setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, fileName)
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
