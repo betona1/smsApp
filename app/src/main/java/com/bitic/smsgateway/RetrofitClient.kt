@@ -84,8 +84,8 @@ object RetrofitClient {
             return true
         }
 
-        // 2. 외부 시도
-        if (tryConnect(externalUrl)) {
+        // 2. 외부 시도 (외부 서버 미설정 시 건너뜀)
+        if (externalUrl.isNotBlank() && tryConnect(externalUrl)) {
             if (activeBaseUrl != externalUrl) {
                 activeBaseUrl = externalUrl
                 isExternal = true

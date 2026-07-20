@@ -19,8 +19,6 @@ import java.net.URL
 
 object AppUpdater {
     private const val TAG = "AppUpdater"
-    private const val GITHUB_OWNER = "betona1"
-    private const val GITHUB_REPO = "smsApp"
     private const val CHECK_INTERVAL = 3600000L // 1시간마다 체크
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -59,8 +57,12 @@ object AppUpdater {
     suspend fun checkUpdateInfo(context: Context): UpdateInfo {
         return withContext(Dispatchers.IO) {
             val currentVersion = getCurrentVersion(context)
+            val repo = Prefs.getUpdateRepo(context)  // "owner/repo", 공란=업데이트 안 함
+            if (repo.isBlank()) {
+                return@withContext UpdateInfo(currentVersion, currentVersion, false, null, "업데이트 소스 미설정")
+            }
             try {
-                val url = URL("https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest")
+                val url = URL("https://api.github.com/repos/$repo/releases/latest")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
@@ -136,7 +138,7 @@ object AppUpdater {
 
     private fun downloadAndInstall(context: Context, url: String, version: String) {
         val appContext = context.applicationContext
-        val fileName = "SmsReceiverApp-v$version.apk"
+        val fileName = "SMSGate-v$version.apk"
 
         val file = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
 

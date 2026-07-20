@@ -6,19 +6,22 @@ import androidx.core.content.edit
 object Prefs {
     private const val PREF_NAME = "app_prefs"
     private const val KEY_URL = "base_url"
-    private const val DEFAULT_URL = "http://192.168.219.100:8010/"
 
-    // API 서버 설정 (내부)
+    // API 서버 설정 (내부) — 기본값 공란: 설치 후 설정화면에서 입력
     private const val KEY_API_HOST = "api_host"
     private const val KEY_API_PORT = "api_port"
-    private const val DEFAULT_API_HOST = "192.168.219.100"
-    private const val DEFAULT_API_PORT = "8379"
+    private const val DEFAULT_API_HOST = ""
+    private const val DEFAULT_API_PORT = "8080"
 
-    // 외부 서버 설정
+    // 외부 서버 설정 (선택)
     private const val KEY_EXT_HOST = "ext_api_host"
     private const val KEY_EXT_PORT = "ext_api_port"
-    private const val DEFAULT_EXT_HOST = "106.247.220.118"
-    private const val DEFAULT_EXT_PORT = "8379"
+    private const val DEFAULT_EXT_HOST = ""
+    private const val DEFAULT_EXT_PORT = "8080"
+
+    // 자동업데이트 소스 (github "owner/repo", 공란=업데이트 확인 안 함)
+    private const val KEY_UPDATE_REPO = "update_repo"
+    private const val DEFAULT_UPDATE_REPO = ""
 
 
     private fun prefs(ctx: Context) =
@@ -39,10 +42,23 @@ object Prefs {
         }
     }
 
+    /** 서버 미설정(host 공란) 시 크래시 방지용 placeholder 반환 (연결만 실패, 앱은 유지) */
     fun getBaseUrl(ctx: Context): String {
         val host = getApiHost(ctx)
         val port = getApiPort(ctx)
+        if (host.isBlank()) return "http://127.0.0.1:$port/"
         return "http://$host:$port/"
+    }
+
+    /** 서버 주소가 설정됐는지 여부 (설정화면 안내용) */
+    fun isConfigured(ctx: Context): Boolean = getApiHost(ctx).isNotBlank()
+
+    // --- 자동업데이트 소스 ---
+    fun getUpdateRepo(ctx: Context): String =
+        prefs(ctx).getString(KEY_UPDATE_REPO, DEFAULT_UPDATE_REPO) ?: DEFAULT_UPDATE_REPO
+
+    fun setUpdateRepo(ctx: Context, repo: String) {
+        prefs(ctx).edit { putString(KEY_UPDATE_REPO, repo.trim()) }
     }
 
     fun setBaseUrl(ctx: Context, url: String) {
@@ -68,6 +84,7 @@ object Prefs {
     fun getExtBaseUrl(ctx: Context): String {
         val host = getExtHost(ctx)
         val port = getExtPort(ctx)
+        if (host.isBlank()) return ""
         return "http://$host:$port/"
     }
 

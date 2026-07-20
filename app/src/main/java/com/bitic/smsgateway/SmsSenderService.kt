@@ -87,14 +87,14 @@ class SmsSenderService : Service() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "SmsReceiverApp::SmsSenderWakeLock"
+            "SMSGate::SmsSenderWakeLock"
         ).apply { acquire() }
 
         // WiFi 연결 유지
         val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiLock = wm.createWifiLock(
             WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-            "SmsReceiverApp::SmsSenderWifiLock"
+            "SMSGate::SmsSenderWifiLock"
         ).apply { acquire() }
 
         Log.d(TAG, "WakeLock + WifiLock 획득")

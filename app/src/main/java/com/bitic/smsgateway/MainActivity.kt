@@ -32,7 +32,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.bitic.smsgateway.ui.theme.SmsReceiverAppTheme
+import com.bitic.smsgateway.ui.theme.SmsGateTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
         AppUpdater.startPeriodicCheck(this)
 
         setContent {
-            SmsReceiverAppTheme {
+            SmsGateTheme {
                 val context = LocalContext.current
                 val storedPhone = loadPhoneNumber(context)?.takeIf { it.isNotBlank() }
                 var myPhone: String? by remember { mutableStateOf(storedPhone) }
@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
                 prefs.edit().putBoolean("samsung_battery_guide_shown", true).apply()
                 Toast.makeText(
                     this,
-                    "삼성 기기: 설정 → 배터리 → SmsReceiverApp → '제한 없음' 선택해주세요",
+                    "삼성 기기: 설정 → 배터리 → SMS Gate → '제한 없음' 선택해주세요",
                     Toast.LENGTH_LONG
                 ).show()
                 // 삼성 배터리 설정으로 이동 시도

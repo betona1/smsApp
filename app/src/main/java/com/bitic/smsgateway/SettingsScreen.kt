@@ -335,7 +335,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             value = apiHost,
                             onValueChange = { apiHost = it },
                             label = { Text("IP") },
-                            placeholder = { Text("192.168.219.100") },
+                            placeholder = { Text("192.168.0.10") },
                             modifier = Modifier.weight(2f),
                             singleLine = true
                         )
@@ -343,7 +343,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             value = apiPort,
                             onValueChange = { apiPort = it },
                             label = { Text("포트") },
-                            placeholder = { Text("8379") },
+                            placeholder = { Text("8080") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
@@ -366,7 +366,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             value = extHost,
                             onValueChange = { extHost = it },
                             label = { Text("IP") },
-                            placeholder = { Text("106.247.220.118") },
+                            placeholder = { Text("공인 IP 또는 도메인") },
                             modifier = Modifier.weight(2f),
                             singleLine = true
                         )
@@ -374,7 +374,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             value = extPort,
                             onValueChange = { extPort = it },
                             label = { Text("포트") },
-                            placeholder = { Text("8379") },
+                            placeholder = { Text("8080") },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
