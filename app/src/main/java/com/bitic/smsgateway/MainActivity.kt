@@ -1,6 +1,7 @@
 package com.bitic.smsgateway
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.provider.Telephony
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -56,11 +58,40 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { /* 결과 무시 가능 */ }
 
+    private val roleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* 기본 문자앱 지정 결과 — 사용자 선택 존중 */ }
+
+    /**
+     * 기본 문자앱으로 지정 요청. 기본 문자앱이 되면 삼성 배터리 절전 대상에서
+     * 원천 제외되어 백그라운드에서 죽지 않고, SMS_DELIVER로 문자를 직접 수신한다.
+     */
+    private fun requestDefaultSmsApp() {
+        if (Telephony.Sms.getDefaultSmsPackage(this) == packageName) return  // 이미 기본앱
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val rm = getSystemService(RoleManager::class.java)
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
+                    roleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_SMS))
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
+                    putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
+                }
+                startActivity(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "기본 문자앱 요청 실패: ${e.message}")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestPermissions()
         checkNotificationListenerPermission()
         requestBatteryOptimizationExemption()
+        requestDefaultSmsApp()  // ★ 기본 문자앱 지정 요청 (절전 제외 + 직접 수신)
 
         // 전체문자 전송 항상 ON + 서비스 자동 시작
         getSharedPreferences("settings", Context.MODE_PRIVATE)

@@ -61,7 +61,17 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- 4. MMS 브로드캐스트 리시버 -->
+        <!-- ★ 기본 문자앱 요건 1/4: SMS 직접 수신 (SMS_DELIVER) -->
+        <receiver
+            android:name=".SmsDeliverReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ★ 기본 문자앱 요건 2/4: MMS 직접 수신 (WAP_PUSH_DELIVER) + 기존 RECEIVED -->
         <receiver
             android:name=".MmsReceiver"
             android:exported="true"
@@ -69,10 +79,42 @@
             android:permission="android.permission.BROADCAST_WAP_PUSH"
             tools:ignore="MissingClass">
             <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
                 <action android:name="android.provider.Telephony.WAP_PUSH_RECEIVED" />
                 <data android:mimeType="application/vnd.wap.mms-message" />
             </intent-filter>
         </receiver>
+
+        <!-- ★ 기본 문자앱 요건 3/4: 문자 작성 진입 (ACTION_SENDTO) -->
+        <activity
+            android:name=".ComposeActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </activity>
+
+        <!-- ★ 기본 문자앱 요건 4/4: 통화 중 메시지 답장 (RESPOND_VIA_MESSAGE) -->
+        <service
+            android:name=".HeadlessSmsSendService"
+            android:exported="true"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </service>
 
         <!-- 6. 부팅 시 자동 시작 -->
         <receiver
