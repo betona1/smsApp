@@ -65,6 +65,8 @@ class SmsSenderService : Service() {
         acquireLocks()
         // ContentObserver 백업 활성화 (NotificationListener가 못 잡는 RCS/그룹알림 보완)
         registerContentObserver()
+        // 절전 중에도 되살아나도록 keepalive 알람 예약
+        KeepAliveReceiver.schedule(applicationContext)
         Log.d(TAG, "서비스 생성됨 (WakeLock 활성)")
     }
 

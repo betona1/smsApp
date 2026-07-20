@@ -116,6 +116,11 @@
             </intent-filter>
         </service>
 
+        <!-- ★ 절전 중에도 발송서비스 되살리는 keepalive 알람 리시버 -->
+        <receiver
+            android:name=".KeepAliveReceiver"
+            android:exported="false" />
+
         <!-- 6. 부팅 시 자동 시작 -->
         <receiver
             android:name=".BootReceiver"
