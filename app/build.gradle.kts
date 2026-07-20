@@ -15,15 +15,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.smsreceiverapp"
+    namespace = "com.bitic.smsgateway"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.smsreceiverapp"
+        applicationId = "com.bitic.smsgateway"
         minSdk = 24
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.0.17"
+        versionCode = 200
+        versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
