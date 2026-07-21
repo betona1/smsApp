@@ -19,9 +19,10 @@ object Prefs {
     private const val DEFAULT_EXT_HOST = ""
     private const val DEFAULT_EXT_PORT = "8080"
 
-    // 자동업데이트 소스 (github "owner/repo", 공란=업데이트 확인 안 함)
+    // 자동업데이트 소스 (github "owner/repo"). 제작사 공식 릴리스 채널이 기본값.
+    // 고객이 자체 채널을 쓰려면 설정에서 변경(공란=업데이트 확인 안 함).
     private const val KEY_UPDATE_REPO = "update_repo"
-    private const val DEFAULT_UPDATE_REPO = ""
+    private const val DEFAULT_UPDATE_REPO = "betona1/smsApp"
 
 
     private fun prefs(ctx: Context) =
