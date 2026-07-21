@@ -36,12 +36,24 @@ class SmsSenderService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val POLL_INTERVAL = 5000L // 5초
 
+        /**
+         * ★ Android 12+ 크래시 방지: 백그라운드에서 startForegroundService를 호출하면
+         * ForegroundServiceStartNotAllowedException으로 앱 전체가 죽는다(밤사이 화면꺼짐 +
+         * keepalive/워치독/알림리스너가 호출 → 크래시 루프 → 앱 사망). 반드시 감싼다.
+         * 시작 실패해도 서비스는 START_STICKY라 시스템이 나중에 복구하고,
+         * 다음 keepalive/heartbeat 때 재시도된다.
+         */
         fun start(context: Context) {
-            val intent = Intent(context, SmsSenderService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                val intent = Intent(context, SmsSenderService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                // 백그라운드 FGS 시작 제한 등 — 크래시시키지 않고 조용히 무시
+                Log.w(TAG, "서비스 시작 보류(백그라운드 제한 가능): ${e.message}")
             }
         }
 

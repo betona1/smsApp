@@ -22,8 +22,8 @@ android {
         applicationId = "com.bitic.smsgateway"
         minSdk = 24
         targetSdk = 35
-        versionCode = 213
-        versionName = "2.1.3"
+        versionCode = 214
+        versionName = "2.1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
