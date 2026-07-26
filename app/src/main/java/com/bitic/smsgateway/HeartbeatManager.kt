@@ -49,7 +49,11 @@ object HeartbeatManager {
         if (phone.isBlank()) return
 
         val version = getAppVersion(context)
-        val request = HeartbeatRequest(phone_number = phone, app_version = version)
+        val request = HeartbeatRequest(
+            phone_number = phone,
+            app_version = version,
+            local_ip = getLocalIp()
+        )
 
         try {
             val response = RetrofitClient.getApi(context).sendHeartbeat(request)
@@ -61,6 +65,20 @@ object HeartbeatManager {
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat 전송 오류: ${e.message}")
         }
+    }
+
+    /**
+     * 사내망(WiFi) IPv4 주소. 서버가 무선 ADB 로 이 폰을 되살릴 때 쓴다.
+     * WifiManager 대신 NetworkInterface 를 쓰는 이유 — 권한이 필요 없고 API 변화에 안 흔들린다.
+     */
+    private fun getLocalIp(): String? = try {
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList() }
+            .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+            ?.hostAddress
+    } catch (e: Exception) {
+        null
     }
 
     private fun getAppVersion(context: Context): String {
