@@ -186,8 +186,12 @@ class SmsSenderWorker(
             }
 
             // 서버에서 발송 대기 목록 가져오기
+            // ★ 내 번호를 실어야 서버가 발신폰 지정을 지킨다(안 실으면 아무 폰이나 픽업).
             val api = RetrofitClient.getApi(applicationContext)
-            val response = api.getOutgoingSms()
+            val myPhone = applicationContext
+                .getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getString("my_phone_number", null)?.takeIf { it.isNotBlank() }
+            val response = api.getOutgoingSms(myPhone, BuildConfig.VERSION_NAME)
 
             if (!response.isSuccessful) {
                 Log.e(TAG, "서버 응답 실패: ${response.code()}")

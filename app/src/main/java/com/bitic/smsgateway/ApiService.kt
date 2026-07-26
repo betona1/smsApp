@@ -11,6 +11,7 @@ import retrofit2.http.PUT
 import retrofit2.http.DELETE
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 // 서버에서 설정 리스트를 받아오고, 문자 수신 정보를 서버로 전송
 interface ApiService {
@@ -45,9 +46,15 @@ interface ApiService {
 
     // === SMS 발송 관련 ===
 
-    // 서버에서 발송 대기 중인 문자 목록 조회
+    // 서버에서 발송 대기 중인 문자 목록 조회.
+    // ★ phone(내 번호)을 반드시 실어야 한다. 없으면 서버가 발신폰 필터를 못 걸어
+    //   다른 폰 앞으로 지정된 발송건까지 아무 폰이나 먼저 집어가 보내버린다
+    //   (발송불가 회선이 집어가면 그대로 실패, 자기 자신에게 보내지는 경우도 발생).
     @GET("api/cpc/sms/outbox/")
-    suspend fun getOutgoingSms(): Response<List<OutgoingSms>>
+    suspend fun getOutgoingSms(
+        @Query("phone") phone: String? = null,
+        @Query("app_version") appVersion: String? = null
+    ): Response<List<OutgoingSms>>
 
     // 발송 결과 서버에 보고
     @POST("api/cpc/sms/outbox/{id}/result/")
