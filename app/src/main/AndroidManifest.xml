@@ -14,7 +14,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- ★ dataSync 아님: Android 15부터 dataSync FGS는 24시간중 6시간만 허용되고
+         초과하면 시스템이 서비스를 강제로 끝낸다(게이트웨이는 24시간 상주해야 함).
+         specialUse는 이 시간제한 대상이 아니다. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- ★ 정확 알람: 백그라운드에서 FGS를 되살릴 수 있는 면제는 정확 알람에만 주어진다.
+         (부정확 알람 setAndAllowWhileIdle 로는 깨어나도 서비스를 못 살림) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -59,7 +66,11 @@
         <service
             android:name=".SmsSenderService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="SMS gateway: 기본 문자앱으로서 문자 수신 중계와 발송 대기열 처리를 24시간 유지" />
+        </service>
 
         <!-- ★ 기본 문자앱 요건 1/4: SMS 직접 수신 (SMS_DELIVER) -->
         <receiver

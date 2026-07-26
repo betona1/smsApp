@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -73,7 +74,17 @@ class SmsSenderService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("문자 수신/발송 대기 중..."))
+        // Android 14+ 는 startForeground 시 서비스 타입을 명시해야 한다.
+        // specialUse = Android 15 의 dataSync 6시간 제한을 받지 않는 상주 게이트웨이 용도.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification("문자 수신/발송 대기 중..."),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("문자 수신/발송 대기 중..."))
+        }
         acquireLocks()
         // ContentObserver 백업 활성화 (NotificationListener가 못 잡는 RCS/그룹알림 보완)
         registerContentObserver()
@@ -85,6 +96,32 @@ class SmsSenderService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startPolling()
         return START_STICKY
+    }
+
+    /**
+     * ★ 시스템이 서비스 실행시간 상한을 통보할 때 호출된다(Android 14 shortService / 15 dataSync 등).
+     *
+     * specialUse 로 바꿨으므로 정상적으로는 호출되지 않아야 하지만, 제조사가 자체 상한을
+     * 걸었을 때 몇 초 안에 stopSelf() 하지 않으면
+     * ForegroundServiceDidNotStopInTimeException 으로 앱이 강제종료된다(v2.1.4 까지의 사망 원인).
+     * → 즉시 정리하고, keepalive 알람으로 재기동을 예약해 게이트웨이를 살려둔다.
+     */
+    private fun handleTimeout(reason: String) {
+        Log.w(TAG, "시스템 실행시간 상한 통보($reason) → 정리 후 재기동 예약")
+        try {
+            KeepAliveReceiver.schedule(applicationContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "재기동 예약 실패: ${e.message}")
+        }
+        stopSelf()
+    }
+
+    override fun onTimeout(startId: Int) {
+        handleTimeout("startId=$startId")
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        handleTimeout("startId=$startId type=$fgsType")
     }
 
     override fun onDestroy() {

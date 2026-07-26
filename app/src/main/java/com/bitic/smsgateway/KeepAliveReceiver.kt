@@ -13,8 +13,12 @@ import android.util.Log
  *
  * 기본 문자앱(프로세스 강제종료 안 됨) + 배터리 면제 + 이 알람 3박자로,
  * 폰이 깊이 자도 AlarmManager가 앱을 깨워 SmsSenderService를 되살린다.
- * setAndAllowWhileIdle는 Doze 중에도 발사되며(화이트리스트 시 더 자주),
- * 매번 다음 알람을 재예약해 무한 반복한다.
+ *
+ * ★ 반드시 '정확 알람'(setExactAndAllowWhileIdle)이어야 한다.
+ * Android 12+ 는 백그라운드에서 포그라운드 서비스를 시작하는 것을 막는데, 그 면제 목록에
+ * 들어가는 건 정확 알람뿐이다. 부정확 알람(setAndAllowWhileIdle)으로 깨어나면 알람은 와도
+ * SmsSenderService.start() 가 ForegroundServiceStartNotAllowedException 으로 막혀
+ * 죽은 서비스를 되살리지 못한다(v2.1.4 까지 그랬음).
  */
 class KeepAliveReceiver : BroadcastReceiver() {
 
@@ -32,12 +36,20 @@ class KeepAliveReceiver : BroadcastReceiver() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val trigger = System.currentTimeMillis() + INTERVAL
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi)
-                } else {
-                    am.set(AlarmManager.RTC_WAKEUP, trigger, pi)
+                // Android 12+ 는 정확 알람 권한이 사용자에 의해 회수될 수 있다 → 확인 후 폴백.
+                val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    am.canScheduleExactAlarms()
+                } else true
+
+                when {
+                    canExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ->
+                        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi)
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ->
+                        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi)
+                    else ->
+                        am.set(AlarmManager.RTC_WAKEUP, trigger, pi)
                 }
-                Log.d("KeepAlive", "다음 keepalive 예약 (+9분)")
+                Log.d("KeepAlive", "다음 keepalive 예약 (+9분, 정확알람=$canExact)")
             } catch (e: Exception) {
                 Log.e("KeepAlive", "알람 예약 실패: ${e.message}")
             }
