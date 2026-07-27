@@ -9,9 +9,11 @@ import kotlinx.coroutines.*
 object HeartbeatManager {
     private const val TAG = "HeartbeatManager"
     private const val INTERVAL = 30000L // 30초
+    private const val FAILOVER_AFTER = 2  // 연속 2회(=1분) 실패하면 주소 재판정
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var job: Job? = null
+    private var consecutiveFailures = 0
 
     fun start(context: Context) {
         job?.cancel()
@@ -52,18 +54,70 @@ object HeartbeatManager {
         val request = HeartbeatRequest(
             phone_number = phone,
             app_version = version,
-            local_ip = getLocalIp()
+            local_ip = getLocalIp(),
+            active_url = RetrofitClient.activeBaseUrl ?: Prefs.getBaseUrl(context),
+            ext_configured = Prefs.getExtBaseUrl(context).isNotBlank()
         )
 
         try {
             val response = RetrofitClient.getApi(context).sendHeartbeat(request)
             if (response.isSuccessful) {
+                consecutiveFailures = 0
                 Log.d(TAG, "Heartbeat OK: ${response.body()?.connected}")
-            } else {
-                Log.e(TAG, "Heartbeat 실패: ${response.code()}")
+                applyExtUrlFromServer(context, response.body()?.ext_url)
+                return
             }
+            Log.e(TAG, "Heartbeat 실패: ${response.code()}")
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat 전송 오류: ${e.message}")
+        }
+
+        // ★ 여기까지 왔으면 서버에 못 닿은 것 → 내부/외부 주소를 다시 판정한다.
+        //
+        // checkAndSwitch 가 MainActivity 에서만 불리던 시절엔, 앱을 켤 때 정한 주소를
+        // 그 뒤로 영영 다시 보지 않았다. 그래서 폰이 사내망을 벗어나면(예: 퇴근길)
+        // 죽은 내부주소만 계속 두드리다 중계가 통째로 멈췄다 — 2026-07-26 밤 CEO폰이
+        // 10시간 공백. 화면을 열어야만 복구되는 구조였다.
+        //
+        // heartbeat 루프는 NotificationListener 가 살려두므로 백그라운드에서도 돈다.
+        // 여기서 재판정하면 폰이 어디에 있든 알아서 외부주소로 넘어간다.
+        consecutiveFailures++
+        if (consecutiveFailures >= FAILOVER_AFTER) {
+            Log.w(TAG, "연속 실패 ${consecutiveFailures}회 → 내부/외부 주소 재판정")
+            try {
+                val ok = RetrofitClient.checkAndSwitch(context)
+                Log.w(TAG, if (ok) "재판정 성공: ${RetrofitClient.activeBaseUrl}"
+                           else "재판정 실패 — 내부·외부 둘 다 불통")
+                if (ok) consecutiveFailures = 0
+            } catch (e: Exception) {
+                Log.e(TAG, "재판정 오류: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 서버가 내려준 외부 접속 주소를 저장한다.
+     *
+     * 폰마다 설정화면에서 손으로 넣지 않으려는 것 — 2026-07-20 제품화에서 외부주소
+     * 기본값을 공란화한 뒤 어느 폰에도 안 들어가 있었고, 그래서 CEO폰이 사내망을 벗어나자
+     * 넘어갈 곳이 없어 10시간 중계가 멈췄다(2026-07-26).
+     *
+     * 사용자가 설정화면에서 직접 넣은 값이 있으면 건드리지 않는다 — 서버 값은 '비어있을 때
+     * 채워주는' 용도다. 공란이 내려오면 무시한다.
+     */
+    private fun applyExtUrlFromServer(context: Context, extUrl: String?) {
+        val url = extUrl?.trim().orEmpty()
+        if (url.isBlank()) return
+        if (Prefs.getExtBaseUrl(context).isNotBlank()) return  // 이미 설정됨 → 존중
+        try {
+            val stripped = url.removePrefix("http://").removePrefix("https://").trimEnd('/')
+            val host = stripped.substringBefore(':')
+            val port = stripped.substringAfter(':', "8379")
+            if (host.isBlank()) return
+            Prefs.setExtServer(context, host, port)
+            Log.w(TAG, "서버가 알려준 외부주소 저장: $host:$port")
+        } catch (e: Exception) {
+            Log.e(TAG, "외부주소 저장 실패: ${e.message}")
         }
     }
 
